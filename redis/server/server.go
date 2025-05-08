@@ -11,8 +11,6 @@ import (
 	"strings"
 	"sync"
 
-	"godis/cluster"
-	"godis/config"
 	database2 "godis/database"
 	"godis/interface/database"
 	"godis/lib/logger"
@@ -36,11 +34,7 @@ type Handler struct {
 // MakeHandler creates a Handler instance
 func MakeHandler() *Handler {
 	var db database.DB
-	if config.Properties.ClusterEnable {
-		db = cluster.MakeCluster()
-	} else {
-		db = database2.NewStandaloneServer()
-	}
+	db = database2.NewStandaloneServer()
 	return &Handler{
 		db: db,
 	}
