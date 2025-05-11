@@ -205,6 +205,10 @@ func (persister *Persister) LoadAof(maxBytes int) {
 	}
 	ch := parser.ParseStream(reader)
 	fakeConn := connection.NewFakeConn() // only used for save dbIndex
+	// Set password for fakeConn to bypass authentication during AOF loading
+	if config.Properties.RequirePass != "" {
+		fakeConn.SetPassword(config.Properties.RequirePass)
+	}
 	for p := range ch {
 		if p.Err != nil {
 			if p.Err == io.EOF {
@@ -225,6 +229,24 @@ func (persister *Persister) LoadAof(maxBytes int) {
 		ret := persister.db.Exec(fakeConn, r.Args)
 		if protocol.IsErrorReply(ret) {
 			logger.Error("exec err", string(ret.ToBytes()))
+		}
+		// Check if the command is EXPIRE or PEXPIRE
+		cmd := strings.ToLower(string(r.Args[0]))
+		if cmd == "expire" || cmd == "pexpire" {
+			key := string(r.Args[1])
+			ttl, err := strconv.ParseInt(string(r.Args[2]), 10, 64)
+			if err == nil {
+				// Convert to milliseconds if it's EXPIRE
+				if cmd == "expire" {
+					ttl *= 1000
+				}
+				// Check if the key is already expired
+				if ttl <= 0 {
+					// Delete the expired key
+					delCmd := utils.ToCmdLine("DEL", key)
+					persister.db.Exec(fakeConn, delCmd)
+				}
+			}
 		}
 		if strings.ToLower(string(r.Args[0])) == "select" {
 			// execSelect success, here must be no error

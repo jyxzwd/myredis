@@ -84,6 +84,8 @@ func NewStandaloneServer() *Server {
 			logger.Error(err)
 		}
 	}
+	// Check and remove expired keys
+	server.checkExpiredKeys()
 	server.slaveStatus = initReplSlaveStatus()
 	server.initMaster()
 	server.startReplCron()
@@ -444,5 +446,18 @@ func (server *Server) SetKeyDeletedCallback(cb database.KeyEventCallback) {
 	for i := range server.dbSet {
 		db := server.mustSelectDB(i)
 		db.deleteCallback = cb
+	}
+}
+
+// checkExpiredKeys checks and removes all expired keys in all databases
+func (server *Server) checkExpiredKeys() {
+	for i := range server.dbSet {
+		db := server.mustSelectDB(i)
+		keys := db.data.Keys()
+		for _, key := range keys {
+			if db.IsExpired(key) {
+				db.Remove(key)
+			}
+		}
 	}
 }
